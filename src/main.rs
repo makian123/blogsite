@@ -5,6 +5,7 @@ extern crate dotenv;
 pub mod schema;
 mod database;
 
+use actix_web::cookie::Cookie;
 use actix_web::{HttpServer, App, get, post, Responder, HttpResponse, HttpRequest};
 use database::db_utils::*;
 use database::blogs::{
@@ -13,7 +14,9 @@ use database::blogs::{
     delete_posts_by_user_id
 };
 use crate::database::users::{
-    find_user_by_id, new_user
+    find_user_by_id,
+    new_user,
+    find_user_by_username
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -29,6 +32,33 @@ struct Dummy_Blog{
 struct Dummy_User{
     pub username: String,
     pub password: String
+}
+
+#[post("/login")]
+async fn login(req: HttpRequest, req_body: String) -> impl Responder{
+    let credentials: Value = serde_json::from_str(&req_body).unwrap();
+    if credentials.get("username").is_none() || credentials.get("password").is_none(){
+        return HttpResponse::BadRequest();
+    }
+    let conn = connect_to_db();
+    let username = credentials.get("username").unwrap().as_str().unwrap().to_string();
+    let pw = credentials.get("password").unwrap().as_str().unwrap().to_string();
+
+    let user = find_user_by_username(&conn, &username);
+    if user.is_none() {
+        return HttpResponse::BadRequest();
+    }
+    let user = user.unwrap();
+
+    if user.pass != pw {
+        return HttpResponse::BadRequest();
+    }
+
+    let cookie = Cookie::build("user_id", user.id.to_string())
+        .secure(true)
+        .finish();
+
+    HttpResponse::Accepted()
 }
 
 #[post("/create_user")]
