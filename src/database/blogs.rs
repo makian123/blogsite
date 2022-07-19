@@ -55,6 +55,13 @@ pub fn get_post_by_creator_id(conn: &PgConnection, creator: i32) -> Vec<Blog> {
     user_blogs.unwrap()
 }
 
+pub fn delete_posts_by_user_id(conn: &PgConnection, user_id: i32){
+    use crate::schema::blogs::dsl::*;
+    use schema::blogs;
+
+    let result = diesel::delete(blogs::table).filter(creator_id.eq(user_id)).execute(conn);
+}
+
 #[derive(Insertable)]
 #[table_name="blogs"]
 struct BlogInsert {
@@ -78,4 +85,28 @@ pub struct Blog {
     pub created_time: i64,
     pub last_edited_time: i64,
     pub likes: i32
+}
+
+impl Blog {
+    pub fn edit(&mut self, conn: &PgConnection, title_in: Option<&String>, body_in: Option<&String>, likes_in: Option<i32>){
+        use self::schema::blogs::dsl::*;
+
+        if title_in.is_none() && body_in.is_none() && likes_in.is_none() {
+            return;
+        }
+
+        let title_in = title_in.unwrap_or(&self.title);
+        let body_in = body_in.unwrap_or(&&self.body);
+        let likes_in = likes_in.unwrap_or(self.likes);
+        let time: i64 = SystemTime::now().duration_since(UNIX_EPOCH).expect("Couldn't generate time").as_secs() as i64;
+        
+        self.last_edited_time = time;
+        self.title = title_in.clone();
+        self.body = body_in.clone();
+        self.likes = likes_in;
+
+        let updated = diesel::update(blogs.filter(id.eq(self.id)))
+            .set((title.eq(&self.title), body.eq(&self.body), likes.eq(self.likes)))
+            .execute(conn);
+    }
 }

@@ -116,3 +116,11 @@ pub struct User{
     ///SHA256 of the password
     pub pass: String
 }
+
+impl User {
+    pub fn delete(&self, conn: &PgConnection) {
+        use schema::users::*;
+
+        let result = diesel::delete(users::table).filter(id.eq(self.id)).execute(conn);
+    }
+}
