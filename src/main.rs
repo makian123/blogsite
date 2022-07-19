@@ -4,9 +4,10 @@ extern crate dotenv;
 
 pub mod schema;
 mod database;
+mod auth;
 
 use actix_web::cookie::Cookie;
-use actix_web::{HttpServer, App, get, post, Responder, HttpResponse, HttpRequest};
+use actix_web::{HttpServer, App, get, post, Responder, HttpResponse, HttpRequest, delete};
 use database::db_utils::*;
 use database::blogs::{
     get_post_by_creator_id,
@@ -20,6 +21,7 @@ use crate::database::users::{
 };
 use serde::Deserialize;
 use serde_json::Value;
+use jwt_simple::prelude::*;
 
 #[derive(Deserialize)]
 struct Dummy_Blog{
@@ -53,10 +55,6 @@ async fn login(req: HttpRequest, req_body: String) -> impl Responder{
     if user.pass != pw {
         return HttpResponse::BadRequest();
     }
-
-    let cookie = Cookie::build("user_id", user.id.to_string())
-        .secure(true)
-        .finish();
 
     HttpResponse::Accepted()
 }
@@ -171,7 +169,7 @@ async fn edit_blogs(req: HttpRequest, req_body: String) -> impl Responder {
 
     HttpResponse::Ok()
 }
-#[post("/users/{user_id}/delete")]
+#[delete("/users/{user_id}")]
 async fn delete_an_user(req: HttpRequest) -> impl Responder {
     let user_id = req.match_info().query("user_id").parse::<i32>();
     if user_id.is_err() {
