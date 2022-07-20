@@ -1,6 +1,7 @@
-use diesel::prelude::*;
+use diesel::{prelude::*, sql_types::Bool};
 use diesel::pg::PgConnection;
 use crate::schema::{users, self};
+use uuid::Uuid;
 
 /// Pushes a new user object in the database and returns a result
 /// of `User` or `&str`
@@ -12,7 +13,7 @@ use crate::schema::{users, self};
 ///     "username".to_string(), 
 ///     "SHA256 of the password".to_string());
 /// ```
-pub fn new_user <'a>(conn: &PgConnection, uname: &String, pw: &String) -> Result<User, &'a str>{
+pub fn new_user <'a>(conn: &PgConnection, uname: &String, pw: &String, admin: bool) -> Result<User, &'a str>{
     if pw.len() != 64 {
         return Err("Invalid password hash length");
     }
@@ -23,7 +24,8 @@ pub fn new_user <'a>(conn: &PgConnection, uname: &String, pw: &String) -> Result
 
     let to_insert = UserInsert {
         username: uname.clone(),
-        pass: pw.clone()
+        pass: pw.clone(),
+        is_admin: admin
     };
 
     let ret_user: User = diesel::insert_into(schema::users::table)
@@ -83,7 +85,7 @@ pub fn find_user_by_username(conn: &PgConnection, uname: &String) -> Option<User
     }
 }
 
-pub fn find_user_by_id(conn: &PgConnection, user_id: i32) -> Option<User>{
+pub fn find_user_by_id(conn: &PgConnection, user_id: String) -> Option<User>{
     use crate::schema::users::dsl::*;
 
     let user_found = users.filter(id.eq(user_id)).load::<User>(conn);
@@ -104,23 +106,25 @@ pub fn find_user_by_id(conn: &PgConnection, user_id: i32) -> Option<User>{
 #[table_name="users"]
 pub struct UserInsert{
     pub username: String,
-    pub pass: String
+    pub pass: String,
+    pub is_admin: bool
 }
 
 #[derive(Debug)]
 #[derive(Queryable)]
 #[derive(Clone)]
 pub struct User{
-    pub id: i32,
+    pub id: String,
     pub username: String,
     ///SHA256 of the password
-    pub pass: String
+    pub pass: String,
+    pub is_admin: bool
 }
 
 impl User {
     pub fn delete(&self, conn: &PgConnection) {
         use schema::users::*;
-
-        let result = diesel::delete(users::table).filter(id.eq(self.id)).execute(conn);
+        let the_id = self.id.clone();
+        let result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
     }
 }

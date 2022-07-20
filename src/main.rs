@@ -6,7 +6,6 @@ pub mod schema;
 mod database;
 mod auth;
 
-use actix_web::cookie::Cookie;
 use actix_web::{HttpServer, App, get, post, Responder, HttpResponse, HttpRequest, delete};
 use database::db_utils::*;
 use database::blogs::{
@@ -14,18 +13,20 @@ use database::blogs::{
     new_post,
     delete_posts_by_user_id
 };
+use jwt_simple::prelude::Claims;
+use crate::auth::errors::{handle_error, Error};
 use crate::database::users::{
     find_user_by_id,
     new_user,
     find_user_by_username
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use jwt_simple::prelude::*;
+use auth::tokens::*;
+use sha256::digest;
 
 #[derive(Deserialize)]
 struct Dummy_Blog{
-    pub creator_id: i32,
     pub title: String,
     pub body: String
 }
@@ -36,11 +37,12 @@ struct Dummy_User{
     pub password: String
 }
 
-#[post("/login")]
+//User routes
+#[get("/login")]
 async fn login(req: HttpRequest, req_body: String) -> impl Responder{
     let credentials: Value = serde_json::from_str(&req_body).unwrap();
     if credentials.get("username").is_none() || credentials.get("password").is_none(){
-        return HttpResponse::BadRequest();
+        return HttpResponse::BadRequest().body("Bad request");
     }
     let conn = connect_to_db();
     let username = credentials.get("username").unwrap().as_str().unwrap().to_string();
@@ -48,17 +50,33 @@ async fn login(req: HttpRequest, req_body: String) -> impl Responder{
 
     let user = find_user_by_username(&conn, &username);
     if user.is_none() {
-        return HttpResponse::BadRequest();
+        return HttpResponse::BadRequest().body("No user found");
     }
     let user = user.unwrap();
 
     if user.pass != pw {
-        return HttpResponse::BadRequest();
+        return HttpResponse::BadRequest().body("Invalid credentials");
     }
 
-    HttpResponse::Accepted()
-}
+    let claim = CustomHeader{
+        user_id: user.id.clone(),
+        is_admin: user.is_admin
+    };
+    let token = Authenticator::create_token(&claim);
+    if token.is_err() {
+        return handle_error(Error::JWTTokenCreationError).await.body("Couldn't create token");
+    }
+    let token = token.unwrap();
 
+    #[derive(Serialize)]
+    struct ReturnVal{
+        pub id: String,
+        pub token: String
+    }
+    let ret = ReturnVal { id: user.id.to_string(), token: token};
+
+    HttpResponse::Accepted().body(serde_json::to_string(&ret).unwrap())
+}
 #[post("/create_user")]
 async fn create_new_user(req_body: String) -> impl Responder{
     let user = serde_json::from_str::<Dummy_User>(&req_body);
@@ -68,23 +86,67 @@ async fn create_new_user(req_body: String) -> impl Responder{
     let user = user.unwrap();
     let conn = connect_to_db();
 
-    let final_user = new_user(&conn, &user.username, &user.password);
+    let final_user = new_user(&conn, &user.username, &digest(user.password), true);
     println!("{:?}", final_user);
 
     HttpResponse::Ok()
 }
+#[delete("/users/{user_id}")]
+async fn delete_an_user(req: HttpRequest) -> impl Responder {
+    let user_id = req.match_info().query("user_id").parse::<uuid::Uuid>();
+    if user_id.is_err() {
+        return HttpResponse::BadRequest();
+    }
+    let user_id = user_id.unwrap().to_string();
+
+    let conn = connect_to_db();
+    let user = find_user_by_id(&conn, user_id);
+    if user.is_none() {
+        return HttpResponse::BadRequest();
+    }
+    let user = user.unwrap();
+
+    delete_posts_by_user_id(&conn, &user.id);
+    user.delete(&conn);
+
+    HttpResponse::Ok()
+}
+
+//Blog routes
 #[post("/create_blog")]
-async fn create_new_blog(req_body: String) -> impl Responder{
+async fn create_new_blog(req: HttpRequest, req_body: String) -> impl Responder{
+    if req.headers().get("token").is_none() || req.headers().get("user_id").is_none() {
+        println!("Header val missing");
+        return HttpResponse::BadRequest();
+    }
+
     let blog = serde_json::from_str::<Dummy_Blog>(&req_body);
     if blog.is_err() {
+        println!("Blog info missing");
         return HttpResponse::BadRequest();
     }
     let blog = blog.unwrap();
     let conn = connect_to_db();
 
-    let user = find_user_by_id(&conn, blog.creator_id);
+    let user_id = req.headers().get("user_id").unwrap().to_str().unwrap().parse::<uuid::Uuid>();
+    if user_id.is_err() {
+        println!("User id missing");
+        return HttpResponse::BadRequest();
+    }
+    let user_id = user_id.unwrap().to_string();
 
+    /*if Authenticator::authorize(
+            false, 
+            Some(user_id), 
+            req.headers().get("token").unwrap().to_str().unwrap()
+            ).await == false {
+        println!("Authentication failed");
+        return HttpResponse::BadRequest();
+    }*/
+
+    let user = find_user_by_id(&conn, user_id);
     if user.is_none(){
+        println!("User found");
         return HttpResponse::BadRequest();
     }
     let user = user.unwrap();
@@ -96,15 +158,15 @@ async fn create_new_blog(req_body: String) -> impl Responder{
 }
 #[get("/blogs/{user_id}")]
 async fn get_blogs_by_id(req: HttpRequest) -> impl Responder {
-    let user_id = req.match_info().query("user_id").parse::<i32>();
+    let user_id = req.match_info().query("user_id").parse::<uuid::Uuid>();
     if user_id.is_err() {
         return HttpResponse::BadRequest().body("Error! No user found");
     }
-    let user_id = user_id.unwrap();
+    let user_id = user_id.unwrap().to_string();
 
     let conn = connect_to_db();
 
-    let posts = get_post_by_creator_id(&conn, user_id);
+    let posts = get_post_by_creator_id(&conn, &user_id);
     HttpResponse::Ok().body(serde_json::to_string(&posts).unwrap())
 }
 #[post("/blogs/{user_id}/{blog_id}/edit")]
@@ -128,7 +190,7 @@ async fn edit_blogs(req: HttpRequest, req_body: String) -> impl Responder {
 
     //Tries to find a blog posted by that user with the id
     //if no blog found throw bad request
-    let mut blogs = get_post_by_creator_id(&conn, usr.id);
+    let mut blogs = get_post_by_creator_id(&conn, &usr.id);
     let mut blog = blogs.iter_mut().find(|x| x.id == blog_id);
     if blog.is_none() {
         return HttpResponse::BadRequest();
@@ -169,37 +231,20 @@ async fn edit_blogs(req: HttpRequest, req_body: String) -> impl Responder {
 
     HttpResponse::Ok()
 }
-#[delete("/users/{user_id}")]
-async fn delete_an_user(req: HttpRequest) -> impl Responder {
-    let user_id = req.match_info().query("user_id").parse::<i32>();
-    if user_id.is_err() {
-        return HttpResponse::BadRequest();
-    }
-    let user_id = user_id.unwrap();
-
-    let conn = connect_to_db();
-    let user = find_user_by_id(&conn, user_id);
-    if user.is_none() {
-        return HttpResponse::BadRequest();
-    }
-    let user = user.unwrap();
-
-    delete_posts_by_user_id(&conn, user.id);
-    user.delete(&conn);
-
-    HttpResponse::Ok()
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()>{
+
     println!("Server running...");
     HttpServer::new(|| {
         App::new()
+        .service(login)
         .service(create_new_user)
         .service(delete_an_user)
         .service(create_new_blog)
         .service(edit_blogs)
         .service(get_blogs_by_id)
+        .service(create_new_blog)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
