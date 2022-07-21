@@ -1,8 +1,6 @@
-use actix_web::http::header::HeaderMap;
 use chrono::Utc;
 use jsonwebtoken::{Header, encode, EncodingKey, decode, DecodingKey, Validation};
-use jwt_simple::{prelude::*, claims};
-use serde_json::{Serializer, Deserializer};
+use jwt_simple::prelude::*;
 use super::errors::Error;
 
 #[derive(Serialize, Deserialize)]
@@ -40,7 +38,7 @@ impl Authenticator {
             .map_err(|_| Error::JWTTokenCreationError)
     }
 
-    pub async fn authorize <'a>(privileged: bool, id: Option<String>, token: &'a str) -> bool {
+    pub async fn _authorize <'a>(privileged: bool, id: Option<String>, token: &'a str) -> bool {
         match decode::<Claims>(
             token,
             &DecodingKey::from_secret(JWT_SECRET),
