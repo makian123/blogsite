@@ -3,7 +3,6 @@ use diesel::pg::PgConnection;
 use dotenv::dotenv;
 use std::env;
 
-
 /// Return a connection to the hosted database.
 /// Requires a `DATABASE_URL` as a variable in enviroment.
 /// 
