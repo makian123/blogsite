@@ -46,11 +46,11 @@ async fn login(_req: HttpRequest, req_body: String) -> impl Responder{
 
     let token = Token::new(&mut redis_conn, &user.id);
     let cookie = Cookie::build("token", token)
-        .secure(true)
+        .path("/")
         .expires(Expiration::DateTime(OffsetDateTime::from_unix_timestamp(Utc::now().timestamp() + 180).unwrap()))
         .finish();
 
-    HttpResponse::Accepted().cookie(cookie).finish()
+    HttpResponse::Ok().cookie(cookie).finish()
 }
 #[post("/create_user")]
 async fn create_new_user(req_body: String) -> impl Responder{
@@ -192,6 +192,27 @@ async fn edit_blogs(req: HttpRequest, req_body: String) -> impl Responder {
 
     HttpResponse::Ok()
 }
+#[post("/blogs/{blog_id}/like")]
+async fn like_a_blog(req: HttpRequest) -> impl Responder{
+    let token = req.cookie("token");
+    if token.is_none() { return HttpResponse::BadRequest().finish(); }
+    let token = token.unwrap().value().to_string();
+
+    let psql_conn = psql_connect_to_db();
+    let mut redis_conn = redis_connect_to_db();
+    let blog_id = req.match_info().query("blog_id").parse().unwrap();
+
+    if Token::find(&mut redis_conn, &token).is_err() { return HttpResponse::BadRequest().finish(); }
+
+    let blog = Blog::get_by_id(&psql_conn, blog_id);
+    if blog.is_none() {
+        return HttpResponse::BadRequest().finish();
+    }
+    let mut blog = blog.unwrap();
+    blog.edit(&psql_conn, None, None, Some(blog.likes + 1));
+
+    HttpResponse::Ok().finish()
+}
 
 //Token things
 #[delete("/api/deauth")]
@@ -227,7 +248,7 @@ async fn refresh_token(req: HttpRequest) -> impl Responder{
     Token::refresh(&mut redis_conn, &token);
 
     let cookie = Cookie::build("token", token)
-        .secure(true)
+    .path("/")
         .expires(Expiration::DateTime(OffsetDateTime::from_unix_timestamp(Utc::now().timestamp() + 180).unwrap()))
         .finish();
 

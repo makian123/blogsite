@@ -23,9 +23,11 @@ async fn main() -> std::io::Result<()>{
         .service(delete_an_user)
         .service(create_new_blog)
         .service(edit_blogs)
+        .service(like_a_blog)
         .service(get_blogs_by_id)
         .service(create_new_blog)
         .service(deauth_token)
+        .service(refresh_token)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
