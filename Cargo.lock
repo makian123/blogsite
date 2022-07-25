@@ -380,6 +380,7 @@ dependencies = [
  "hmac 0.12.1",
  "jsonwebtoken",
  "jwt-simple",
+ "rand",
  "redis",
  "serde",
  "serde_json",

@@ -1,7 +1,7 @@
+/*
 use actix_web::{HttpResponse, HttpResponseBuilder};
 use serde::Serialize;
 
-#[derive(Debug)]
 pub enum Error {
     WrongCredentialsError,
     JWTTokenError,
@@ -32,4 +32,4 @@ pub async fn handle_error(err: Error) -> HttpResponseBuilder {
             HttpResponse::BadRequest()
         }
     }
-}
+}*/

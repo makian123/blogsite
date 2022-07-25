@@ -11,14 +11,10 @@ mod blogs;
 mod infrastructure;
 
 use actix_web::{HttpServer, App};
-use actix_web_httpauth::middleware::HttpAuthentication;
 use infrastructure::routes::*;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()>{
-    let redis_client = redis::Client::open("redis://127.0.0.1/").unwrap();
-    let mut con = redis_client.get_connection().unwrap();
-
     println!("Server running...");
     HttpServer::new(move || {
         App::new()
@@ -29,6 +25,7 @@ async fn main() -> std::io::Result<()>{
         .service(edit_blogs)
         .service(get_blogs_by_id)
         .service(create_new_blog)
+        .service(deauth_token)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

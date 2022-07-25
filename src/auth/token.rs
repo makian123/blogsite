@@ -1,42 +1,38 @@
-use redis::Commands;
+use redis::{Commands, RedisError};
+use rand::distributions::{Alphanumeric, DistString};
 
-pub struct Token{
-    pub val: String
-}
+pub struct Token{}
 
 impl Token {
-    pub fn new() -> String{
-        let client = redis::Client::open("redis://127.0.0.1/");
-        if client.is_err(){
-            return "".to_string();
-        }
-        let conn = client.unwrap().get_connection();
-        if conn.is_err() {
-            return "".to_string();
-        }
-        let mut conn = conn.unwrap();
+    pub fn new(redis_conn: &mut redis::Connection, user_id: &String) -> String{
+        let str = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 
-        let str = String::from("asd123");
-
-        conn.set::<String, &str, String>(str.clone(), "alive");
+        let _res = redis_conn.set_ex::<&String, &String, i32>(&str, user_id, 180);
 
         str
     }
 
-    pub fn delete(token: String){
-        let client = redis::Client::open("redis://127.0.0.1/");
-        if client.is_err(){
-            return;
+    pub fn delete(redis_conn: &mut redis::Connection, token: &String){
+        match redis_conn.get::<String, String>(token.clone()) {
+            Ok(_) => {
+                let _res = redis_conn.del::<String, i32>(token.clone());
+            },
+            Err(_) => return,
         }
-        let conn = client.unwrap().get_connection();
-        if conn.is_err() {
-            return;
-        }
-        let mut conn = conn.unwrap();
-        
-        match conn.get::<String, String>(token) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
-        }
+    }
+
+    pub fn find(redis_conn: &mut redis::Connection, token: &String) -> Result<String, RedisError>{
+        redis_conn.get::<&String, String>(token)
+    }
+
+    pub fn refresh(redis_conn: &mut redis::Connection, token: &String) -> bool {
+        let token = Token::find(redis_conn, token);
+        if token.is_err() { return false; }
+        let token = token.unwrap();
+
+        let res = redis_conn.expire::<&String, i32>(&token, 180);
+        if res.is_err() { return false; }
+
+        return true;
     }
 }
