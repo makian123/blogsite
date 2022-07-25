@@ -3,18 +3,19 @@ table! {
         id -> Int4,
         title -> Varchar,
         body -> Varchar,
-        creator_id -> Int4,
-        created_time -> Int8,
-        last_edited_time -> Int8,
+        created_by -> Varchar,
+        created_at -> Timestamptz,
+        updated_at -> Timestamptz,
         likes -> Int4,
     }
 }
 
 table! {
     users (id) {
-        id -> Int4,
+        id -> Varchar,
         username -> Varchar,
         pass -> Varchar,
+        is_admin -> Bool,
     }
 }
 
