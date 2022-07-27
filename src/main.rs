@@ -40,15 +40,18 @@ async fn main() -> std::io::Result<()>{
     HttpServer::new(move || {
         App::new()
         .app_data(actix_web::web::Data::new(app_state.clone()))
+        //User routes
         .service(login)
         .service(create_new_user)
         .service(delete_an_user)
+        //Blog routes
         .service(create_new_blog)
         .service(edit_blogs)
         .service(like_a_blog)
         .service(get_blogs_by_id)
         .service(create_new_blog)
         .service(delete_blog)
+        //Token routes
         .service(deauth_token)
         .service(refresh_token)
     })

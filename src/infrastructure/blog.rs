@@ -2,7 +2,7 @@ use actix_web::{get, post, put, HttpRequest, web::Data, Responder, HttpResponse,
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::{app::AppState, auth::token::Token, database::models::{User, Blog, Like}};
+use crate::{app::AppState, auth::token::Token, database::models::{user::*, blog::*, like::*}};
 
 #[derive(Deserialize)]
 struct DummyBlog{

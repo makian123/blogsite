@@ -4,7 +4,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use sha256::digest;
 
-use crate::{app::AppState, database::models::{User, Blog}, auth::token::Token};
+use crate::{app::AppState, database::models::{user::User, blog::Blog}, auth::token::Token};
 
 #[derive(Deserialize)]
 struct DummyUser{
