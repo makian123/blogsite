@@ -11,6 +11,13 @@ table! {
 }
 
 table! {
+    likes (user_id, blog_id) {
+        user_id -> Varchar,
+        blog_id -> Int4,
+    }
+}
+
+table! {
     users (id) {
         id -> Varchar,
         username -> Varchar,
@@ -19,7 +26,12 @@ table! {
     }
 }
 
+joinable!(blogs -> users (created_by));
+joinable!(likes -> blogs (blog_id));
+joinable!(likes -> users (user_id));
+
 allow_tables_to_appear_in_same_query!(
     blogs,
+    likes,
     users,
 );

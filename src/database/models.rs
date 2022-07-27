@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
-use diesel::prelude::*;
-use crate::schema::{users, blogs, self};
+use diesel::{prelude::*, r2d2::{ConnectionManager, PooledConnection}};
+use crate::schema::{self, *};
 use chrono::{NaiveDateTime, Utc};
 
 #[derive(Debug, PartialEq, PartialOrd, Eq)]
@@ -99,6 +99,13 @@ impl Blog {
     
         let _result = diesel::delete(schema::blogs::table).filter(created_by.eq(user_id)).execute(conn);
     }
+    pub fn delete_by_id(conn: &PgConnection, blog_id_in: i32){
+        use crate::schema::blogs::dsl::*;
+        use crate::schema::likes::dsl::*;
+
+        let _result = diesel::delete(schema::blogs::table).filter(id.eq(blog_id_in)).execute(conn);
+        let _result = diesel::delete(schema::likes::table).filter(blog_id.eq(blog_id_in)).execute(conn);
+    }
     
     pub fn edit(&mut self, conn: &PgConnection, title_in: Option<&String>, body_in: Option<&String>, likes_in: Option<i32>){
         use self::schema::blogs::dsl::*;
@@ -151,7 +158,7 @@ impl User {
     ///     "username".to_string(), 
     ///     "SHA256 of the password".to_string());
     /// ```
-    pub fn new <'a>(conn: &PgConnection, uname: &String, pw: &String, admin: bool) -> Result<User, &'a str>{
+    pub fn new <'a>(conn: &PooledConnection<ConnectionManager<PgConnection>>, uname: &String, pw: &String, admin: bool) -> Result<User, &'a str>{
         if pw.len() != 64 {
             return Err("Invalid password hash length");
         }
@@ -174,13 +181,13 @@ impl User {
         Ok(ret_user)
     }
 
-    pub fn delete(&self, conn: &PgConnection) {
+    pub fn delete(&self, conn: &PooledConnection<ConnectionManager<PgConnection>>) {
         use schema::users::*;
         let the_id = self.id.clone();
         let _result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
     }
 
-    pub fn find_by_id(conn: &PgConnection, user_id: &String) -> Option<User>{
+    pub fn find_by_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user_id: &String) -> Option<User>{
         use crate::schema::users::dsl::*;
     
         let user_found = users.filter(id.eq(user_id)).load::<User>(conn);
@@ -211,7 +218,7 @@ impl User {
     ///     }
     /// }
     /// ```
-    pub fn find_user_by_username(conn: &PgConnection, uname: &String) -> Option<User> {
+    pub fn find_user_by_username(conn: &PooledConnection<ConnectionManager<PgConnection>>, uname: &String) -> Option<User> {
         use crate::schema::users::dsl::*;
 
         let user_found = users.filter(username.eq(uname)).load::<User>(conn);
@@ -228,4 +235,49 @@ impl User {
         }
     }
 
+}
+
+#[derive(Insertable, Queryable)]
+#[table_name="likes"]
+pub struct Like{
+    pub user_id: String,
+    pub blog_id: i32
+}
+
+impl Like{
+    pub fn new(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: &String, blog: i32) -> Option<Like> {
+        let like = Like {
+            user_id: user.clone(),
+            blog_id: blog.clone()
+        };
+        let res = diesel::insert_into(likes::table)
+            .values(&like).get_result(conn);
+
+        if res.is_err(){
+            return None;
+        }
+        Some(res.unwrap())
+    }
+    pub fn get_by_user_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: String) -> Vec<Like> {
+        use crate::schema::likes::dsl::*;
+        let likes_found = likes.filter(user_id.eq(user)).load::<Like>(conn);
+        if likes_found.is_err() {
+            return Vec::new();
+        }
+        
+        likes_found.unwrap()
+    }
+    pub fn get_by_blog_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, blog: i32) -> Vec<Like> {
+        use crate::schema::likes::dsl::*;
+        let likes_found = likes.filter(blog_id.eq(blog)).load::<Like>(conn);
+        if likes_found.is_err() {
+            return Vec::new();
+        }
+        
+        likes_found.unwrap()
+    }
+    pub fn delete(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: &String, blog: i32) {
+        use crate::schema::likes::dsl::*;
+        let _temp = diesel::delete(likes.filter(user_id.eq(user)).filter(blog_id.eq(blog))).execute(conn);
+    }
 }
