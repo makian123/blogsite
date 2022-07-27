@@ -8,8 +8,6 @@ pub mod database;
 pub mod app;
 
 mod auth;
-mod users;
-mod blogs;
 mod infrastructure;
 
 use std::sync::Arc;
