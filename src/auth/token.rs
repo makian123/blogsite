@@ -1,10 +1,11 @@
-use redis::{Commands, RedisError};
+use diesel::r2d2::PooledConnection;
+use r2d2_redis::{RedisConnectionManager, redis::{Commands, RedisError}};
 use rand::distributions::{Alphanumeric, DistString};
 
 pub struct Token{}
 
 impl Token {
-    pub fn new(redis_conn: &mut redis::Connection, user_id: &String) -> String{
+    pub fn new(redis_conn: &mut PooledConnection<RedisConnectionManager>, user_id: &String) -> String{
         let str = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 
         let _res = redis_conn.set_ex::<&String, &String, i32>(&str, user_id, 180);
@@ -12,7 +13,7 @@ impl Token {
         str
     }
 
-    pub fn delete(redis_conn: &mut redis::Connection, token: &String){
+    pub fn delete(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String){
         match redis_conn.get::<String, String>(token.clone()) {
             Ok(_) => {
                 let _res = redis_conn.del::<String, i32>(token.clone());
@@ -21,11 +22,11 @@ impl Token {
         }
     }
 
-    pub fn find(redis_conn: &mut redis::Connection, token: &String) -> Result<String, RedisError>{
+    pub fn find(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String) -> Result<String, RedisError>{
         redis_conn.get::<&String, String>(token)
     }
 
-    pub fn refresh(redis_conn: &mut redis::Connection, token: &String) -> bool {
+    pub fn refresh(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String) -> bool {
         let token = Token::find(redis_conn, token);
         if token.is_err() { return false; }
         let token = token.unwrap();
