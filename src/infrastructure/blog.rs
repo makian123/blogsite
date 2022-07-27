@@ -14,7 +14,7 @@ struct DummyBlog{
 #[post("/blog")]
 pub async fn create_new_blog(req: HttpRequest, req_body: String, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest(); }
+    if token.is_none() { return HttpResponse::Unauthorized(); }
     let token = token.unwrap().value().to_string();
 
     let blog = serde_json::from_str::<DummyBlog>(&req_body);
@@ -24,11 +24,11 @@ pub async fn create_new_blog(req: HttpRequest, req_body: String, app_state: Data
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
 
     let user_id = Token::find(&mut redis_conn, &token);
-    if user_id.is_err() { return HttpResponse::BadRequest(); }
+    if user_id.is_err() { return HttpResponse::Unauthorized(); }
     let user_id = String::from(user_id.unwrap().to_string());
 
     let user = User::find_by_id(&psql_conn, &user_id);
-    if user.is_none(){ return HttpResponse::BadRequest(); }
+    if user.is_none(){ return HttpResponse::Unauthorized(); }
     let user = user.unwrap();
 
     if Blog::new(&psql_conn, &user, &blog.title, &blog.body).is_err() { return HttpResponse::InternalServerError(); }
@@ -42,7 +42,7 @@ pub async fn get_blogs_by_id(req: HttpRequest, app_state: Data<AppState>) -> imp
     let conn = app_state.psql_pool.clone().get().unwrap();
     let user = User::find_user_by_username(&conn, &username);
     if user.is_none() {
-        return HttpResponse::BadRequest().body("");
+        return HttpResponse::BadRequest().finish();
     }
     let user = user.unwrap();
 
@@ -52,7 +52,7 @@ pub async fn get_blogs_by_id(req: HttpRequest, app_state: Data<AppState>) -> imp
 #[put("/blogs/{blog_id}")]
 pub async fn edit_blogs(req: HttpRequest, req_body: String, app_state: Data<AppState>) -> impl Responder {
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest(); }
+    if token.is_none() { return HttpResponse::Unauthorized(); }
     let token = token.unwrap().value().to_string();
     
     //Checks for request body, if there's none, throw bad request
@@ -61,16 +61,15 @@ pub async fn edit_blogs(req: HttpRequest, req_body: String, app_state: Data<AppS
     let updated_blog: Value = updated_blog.unwrap();
 
     //Starts a db and tries to find user from supplied id
-    //if no user found, bad request
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
     let psql_conn = app_state.psql_pool.clone().get().unwrap();
 
     let user_id = Token::find(&mut redis_conn, &token);
-    if user_id.is_err() { return HttpResponse::BadRequest(); }
+    if user_id.is_err() { return HttpResponse::Unauthorized(); }
     let user_id = user_id.unwrap();
     let usr = User::find_by_id(&psql_conn, &user_id);
     let blog_id = req.match_info().query("blog_id").to_string();
-    if usr.is_none() { return HttpResponse::BadRequest(); }
+    if usr.is_none() { return HttpResponse::Unauthorized(); }
     let usr = usr.unwrap();
 
     //Tries to find a blog posted by that user with the id
@@ -110,14 +109,14 @@ pub async fn edit_blogs(req: HttpRequest, req_body: String, app_state: Data<AppS
 #[put("/blogs/{blog_id}/like")]
 pub async fn like_a_blog(req: HttpRequest, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest().finish(); }
+    if token.is_none() { return HttpResponse::Unauthorized().finish(); }
     let token = token.unwrap().value().to_string();
 
     let psql_conn = app_state.psql_pool.clone().get().unwrap();
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
     let blog_id = req.match_info().query("blog_id").parse().unwrap();
 
-    if Token::find(&mut redis_conn, &token).is_err() { return HttpResponse::BadRequest().finish(); }
+    if Token::find(&mut redis_conn, &token).is_err() { return HttpResponse::Unauthorized().finish(); }
     let user_id = Token::find(&mut redis_conn, &token).unwrap();
 
     let blog = Blog::get_by_id(&psql_conn, blog_id);
@@ -140,17 +139,17 @@ pub async fn like_a_blog(req: HttpRequest, app_state: Data<AppState>) -> impl Re
 #[delete("/blog/{blog_id}")]
 async fn delete_blog(req: HttpRequest, app_state: Data<AppState>) -> impl Responder {
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest().finish(); }
+    if token.is_none() { return HttpResponse::Unauthorized().finish(); }
     let token = token.unwrap().value().to_string();
 
     let psql_conn = app_state.psql_pool.clone().get().unwrap();
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
 
     let user_id = Token::find(&mut redis_conn, &token);
-    if user_id.is_err() { return HttpResponse::BadRequest().finish(); }
+    if user_id.is_err() { return HttpResponse::Unauthorized().finish(); }
     let user_id = String::from(user_id.unwrap().to_string());
     let user = User::find_by_id(&psql_conn, &user_id);
-    if user.is_none(){ return HttpResponse::BadRequest().finish(); }
+    if user.is_none(){ return HttpResponse::Unauthorized().finish(); }
     let user = user.unwrap();
 
     let blog_id = req.match_info().query("blog_id").parse::<i32>();

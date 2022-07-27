@@ -7,12 +7,12 @@ use crate::{app::AppState, auth::token::Token};
 #[delete("/api/deauth")]
 pub async fn deauth_token(req: HttpRequest, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest().finish(); }
+    if token.is_none() { return HttpResponse::Unauthorized().finish(); }
     let token = token.unwrap().value().to_string();
     
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
     if Token::find(&mut redis_conn, &token).is_err() {
-        return HttpResponse::BadRequest().finish();
+        return HttpResponse::Unauthorized().finish();
     }
     Token::delete(&mut redis_conn, &token);
 
@@ -27,12 +27,12 @@ pub async fn deauth_token(req: HttpRequest, app_state: Data<AppState>) -> impl R
 #[put("/api/refresh")]
 pub async fn refresh_token(req: HttpRequest, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");
-    if token.is_none() { return HttpResponse::BadRequest().finish(); }
+    if token.is_none() { return HttpResponse::Unauthorized().finish(); }
     let token = token.unwrap().value().to_string();
     
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
     if Token::find(&mut redis_conn, &token).is_err() {
-        return HttpResponse::BadRequest().finish();
+        return HttpResponse::Unauthorized().finish();
     }
     Token::refresh(&mut redis_conn, &token);
 

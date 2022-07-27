@@ -74,7 +74,9 @@ impl Blog {
     pub fn get_by_creator_id(conn: &PgConnection, creator: &String) -> Vec<Blog> {
         use crate::schema::blogs::dsl::*;
     
-        let user_blogs = blogs.filter(created_by.eq(creator)).load::<Blog>(conn);
+        let user_blogs = blogs.filter(created_by.eq(creator))
+            .limit(25)
+            .load::<Blog>(conn);
         if user_blogs.is_err() {
             return Vec::new();
         }

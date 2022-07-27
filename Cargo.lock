@@ -360,6 +360,7 @@ dependencies = [
  "r2d2_redis",
  "rand",
  "redis 0.21.5",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.2",
