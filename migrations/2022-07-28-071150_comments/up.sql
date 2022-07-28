@@ -1,0 +1,8 @@
+-- Your SQL goes here
+CREATE TABLE COMMENTS(
+    id VARCHAR(36) PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4 (),
+    user_id VARCHAR REFERENCES users(id) NOT NULL,
+    blog_id INT REFERENCES blogs(id) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    body VARCHAR NOT NULL
+);

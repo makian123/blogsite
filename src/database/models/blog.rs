@@ -75,6 +75,7 @@ impl Blog {
         use crate::schema::blogs::dsl::*;
     
         let user_blogs = blogs.filter(created_by.eq(creator))
+            .order(created_at.desc())
             .limit(25)
             .load::<Blog>(conn);
         if user_blogs.is_err() {

@@ -1,6 +1,11 @@
-use actix_web::{get, post, put, HttpRequest, web::Data, Responder, HttpResponse, delete};
+use std::{path::PathBuf, pin::Pin};
+
+use actix_multipart::Multipart;
+use actix_web::{get, post, put, HttpRequest, web::{Data, Payload, Bytes}, Responder, HttpResponse, delete, FromRequest, error};
 use serde::Deserialize;
 use serde_json::Value;
+use uuid::Uuid;
+use futures::{stream::StreamExt as _, TryStreamExt, Future};
 
 use crate::{app::AppState, auth::token::Token, database::models::{user::*, blog::*, like::*}};
 
@@ -10,9 +15,18 @@ struct DummyBlog{
     pub body: String
 }
 
+fn generate_file_name(extension: &String) -> PathBuf {
+    let mut p = PathBuf::new();
+    p.push(format!("images/{}.{}", Uuid::new_v4(), extension));
+    p
+}
+
 //Blog routes
 #[post("/blog")]
-pub async fn create_new_blog(req: HttpRequest, req_body: String, app_state: Data<AppState>) -> impl Responder{
+pub async fn create_new_blog(req: HttpRequest, req_body: String, app_state: Data<AppState>, mut payload: Multipart) -> impl Responder{
+    while let Some(chunk) = payload.next().await {
+        println!("{}", chunk.unwrap().content_disposition().get_filename().unwrap());
+    }
     let token = req.cookie("token");
     if token.is_none() { return HttpResponse::Unauthorized(); }
     let token = token.unwrap().value().to_string();
@@ -136,7 +150,7 @@ pub async fn like_a_blog(req: HttpRequest, app_state: Data<AppState>) -> impl Re
 
     HttpResponse::Ok().finish()
 }
-#[delete("/blog/{blog_id}")]
+#[delete("/blogs/{blog_id}")]
 async fn delete_blog(req: HttpRequest, app_state: Data<AppState>) -> impl Responder {
     let token = req.cookie("token");
     if token.is_none() { return HttpResponse::Unauthorized().finish(); }
