@@ -1,5 +1,5 @@
 use diesel::{PgConnection, prelude::*, r2d2::{PooledConnection, ConnectionManager}};
-use crate::schema::{users, self};
+use crate::{schema::{users, self}, app::AppError};
 
 #[derive(Debug)]
 #[derive(Queryable)]
@@ -60,7 +60,7 @@ impl User {
         let _result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
     }
 
-    pub fn find_by_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user_id: &String) -> Option<User>{
+    pub fn find_by_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user_id: &String) -> Result<User, AppError>{
         use crate::schema::users::dsl::*;
     
         let user_found = users.filter(id.eq(user_id)).load::<User>(conn);
@@ -68,12 +68,12 @@ impl User {
         match user_found {
             Ok(ret) => {
                 if ret.len() == 0 {
-                    return None;
+                    return Err(AppError::BadRequest);
                 }
     
-                Some(ret[0].clone())
+                Ok(ret[0].clone())
             },
-            Err(_msg) => None
+            Err(_msg) => Err(AppError::UnauthorizedError)
         }
     }
 

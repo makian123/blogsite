@@ -3,6 +3,7 @@ table! {
         id -> Int4,
         title -> Varchar,
         body -> Varchar,
+        image_id -> Nullable<Varchar>,
         created_by -> Varchar,
         created_at -> Timestamptz,
         updated_at -> Timestamptz,

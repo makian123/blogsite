@@ -1,7 +1,7 @@
 use chrono::{NaiveDateTime, Utc};
 use diesel::{PgConnection, prelude::*};
 use serde::{Serialize, Deserialize};
-use crate::schema::{blogs, self};
+use crate::{schema::{blogs, self}, app::AppError};
 use super::user::*;
 
 #[derive(Debug, PartialEq, PartialOrd, Eq)]
@@ -12,6 +12,7 @@ pub struct Blog {
     pub id: i32,
     pub title: String,
     pub body: String,
+    pub image_id: Option<String>,
     pub created_by: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -23,6 +24,7 @@ pub struct Blog {
 struct BlogInsert {
     pub title: String,
     pub body: String,
+    pub image_id: Option<String>,
     pub created_by: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -44,12 +46,9 @@ impl Ord for Blog {
 }
 
 impl Blog {
-    pub fn new <'a>(conn: &PgConnection, creator: &User, title_in: &String, body_in: &String) -> Result<Blog, &'a str>{
-        if title_in.len() == 0 {
-            return Err("No title found");
-        }
-        if body_in.len() == 0 {
-            return Err("No body found");
+    pub fn new(conn: &PgConnection, creator: &User, title_in: &String, body_in: &String, img_id: Option<&String>) -> Result<Blog, AppError>{
+        if title_in.len() == 0 || body_in.len() == 0{
+            return Err(AppError::BadRequest);
         }
     
         let time = Utc::now().naive_utc();
@@ -60,13 +59,16 @@ impl Blog {
             created_by: creator.id.clone(),
             created_at: time,
             updated_at: time,
-            likes: 0
+            likes: 0,
+            image_id: match img_id{
+                Some(img) => Some(img.clone()),
+                None => None,
+            }
         };
     
         let ret_blog: Blog = diesel::insert_into(schema::blogs::table)
             .values(&to_insert)
-            .get_result(conn)
-            .expect("Error");
+            .get_result(conn)?;
     
         Ok(ret_blog)
     }
