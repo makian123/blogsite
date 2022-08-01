@@ -27,6 +27,7 @@ pub fn psql_connect_to_db() -> PgConnection {
 /// ```
 pub fn redis_connect_to_db() -> redis::Connection {
     dotenv().ok();
+    let redis_url = env::var("REDIS_DATABASE_URL").expect("Enviroment var 'REDIS_DATABASE_URL' not set");
 
-    redis::Client::open("redis://127.0.0.1/").expect("Error connecting to redis").get_connection().unwrap()
+    redis::Client::open(redis_url.clone()).expect("Error connecting to redis").get_connection().expect(&format!("Error connecting to {}", redis_url))
 }
