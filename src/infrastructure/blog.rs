@@ -33,7 +33,7 @@ fn extract_extension(buffer: &[u8]) -> String{
         }
     }
 
-    ret
+    ret.to_lowercase()
 }
 
 async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, String), AppError> {
@@ -44,7 +44,7 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
         
         if content_type.get_name().is_some() {
             match content_type.get_name().unwrap() {
-                "image" => {
+                "file" => {
                     let file_name = Uuid::new_v4();
                     let mut p = PathBuf::new();
                     p.push(format!("images/{}", file_name.clone().to_string()));
@@ -69,10 +69,10 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
 
                     let the_file = fs::read(real_path.clone()).unwrap();
                     let ret = extract_extension(&the_file[..]);
-                    cloned_path.set_extension(ret);
+                    cloned_path.set_extension(ret.clone());
                     let _return = fs::rename(real_path, cloned_path.clone());
                     
-                    filename.push_str(&cloned_path.to_str().unwrap().to_string());
+                    filename.push_str(format!("{}.{}", Uuid::to_string(&file_name), &ret).as_str());
                 },
                 "title" => {
                     title.clear();
@@ -103,15 +103,14 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
 //Blog routes
 #[post("/blog")]
 pub async fn create_new_blog(req: HttpRequest, app_state: Data<AppState>, mut mp: Multipart) -> Result<HttpResponse, AppError>{
-    let (title, body, filename) = parse_multipart(&mut mp).await?;
-    let token = req.cookie("token").ok_or(AppError::Forbidden)?.value().to_string();
+    let token = req.cookie("token").ok_or(AppError::BadRequest)?.value().to_string();
 
     let psql_conn = app_state.psql_pool.clone().get().unwrap();
     let mut redis_conn = app_state.redis_pool.clone().get().unwrap();
 
     let user_id = Token::find(&mut redis_conn, &token)?;
-
     let user = User::find_by_id(&psql_conn, &user_id)?;
+    let (title, body, filename) = parse_multipart(&mut mp).await?;
 
     Blog::new(&psql_conn, &user, &title, &body,
         if filename.len() == 0 {
@@ -122,7 +121,7 @@ pub async fn create_new_blog(req: HttpRequest, app_state: Data<AppState>, mut mp
         }
     )?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(HttpResponse::Ok().body(filename))
 }
 #[get("/blogs/{username}")]
 pub async fn get_blogs_by_id(req: HttpRequest, app_state: Data<AppState>) -> Result<HttpResponse, AppError> {

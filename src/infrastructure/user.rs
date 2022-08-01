@@ -41,8 +41,10 @@ pub async fn login(_req: HttpRequest, req_body: String, app_state: Data<AppState
 }
 #[post("/user")]
 pub async fn create_new_user(req_body: String, app_state: Data<AppState>) -> Result<HttpResponse, AppError>{
-    let user = serde_json::from_str::<DummyUser>(&req_body).map_err(|_| AppError::BadRequest)?;
+    let mut user = serde_json::from_str::<DummyUser>(&req_body).map_err(|_| AppError::BadRequest)?;
     let conn = app_state.psql_pool.clone().get().unwrap();
+
+    user.password = user.password.trim().to_string();
 
     if user.password.len() < 10 { 
         return Err(AppError::BadRequest); 

@@ -66,7 +66,7 @@ impl Blog {
             }
         };
     
-        let ret_blog: Blog = diesel::insert_into(schema::blogs::table)
+        let ret_blog = diesel::insert_into(schema::blogs::table)
             .values(&to_insert)
             .get_result(conn)?;
     
