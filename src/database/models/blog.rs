@@ -1,3 +1,4 @@
+use std::{fs, path::PathBuf};
 use chrono::{NaiveDateTime, Utc};
 use diesel::{PgConnection, prelude::*};
 use serde::{Serialize, Deserialize};
@@ -78,7 +79,6 @@ impl Blog {
     
         let user_blogs = blogs.filter(created_by.eq(creator))
             .order(created_at.desc())
-            .limit(25)
             .load::<Blog>(conn);
         if user_blogs.is_err() {
             return Vec::new();
@@ -109,6 +109,14 @@ impl Blog {
         use crate::schema::blogs::dsl::*;
         use crate::schema::likes::dsl::*;
 
+        let blog: Blog = blogs.find(blog_id_in).first::<Blog>(conn).unwrap();
+        if blog.image_id.is_some() {
+            let res = fs::remove_file(PathBuf::from("images/".to_string() + &blog.image_id.clone().unwrap()));
+            if res.is_err() {
+                return;
+            }
+        }
+        
         let _result = diesel::delete(schema::blogs::table).filter(id.eq(blog_id_in)).execute(conn);
         let _result = diesel::delete(schema::likes::table).filter(blog_id.eq(blog_id_in)).execute(conn);
     }

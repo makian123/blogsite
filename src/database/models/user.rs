@@ -1,5 +1,19 @@
-use diesel::{PgConnection, prelude::*, r2d2::{PooledConnection, ConnectionManager}};
-use crate::{schema::{users, self}, app::AppError};
+use diesel::{
+    PgConnection,
+    prelude::*,
+    r2d2::{
+        PooledConnection,
+        ConnectionManager
+    }
+};
+use crate::{
+    schema::{
+        users,
+        self
+    },
+    app::AppError,
+    database::models::blog::Blog
+};
 
 #[derive(Debug)]
 #[derive(Queryable)]
@@ -56,7 +70,12 @@ impl User {
 
     pub fn delete(&self, conn: &PooledConnection<ConnectionManager<PgConnection>>) {
         use schema::users::*;
+
         let the_id = self.id.clone();
+        let blogs = Blog::get_by_creator_id(conn, &self.id);
+        for blog in blogs {
+            Blog::delete_by_id(conn, blog.id);
+        }
         let _result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
     }
 

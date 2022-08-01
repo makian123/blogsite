@@ -15,7 +15,7 @@ struct DummyUser{
 //User routes
 #[get("/user")]
 pub async fn login(_req: HttpRequest, req_body: String, app_state: Data<AppState>) -> Result<HttpResponse, AppError>{
-    let credentials: Value = serde_json::from_str(&req_body).unwrap();
+    let credentials: Value = serde_json::from_str(req_body.trim()).unwrap();
     if credentials.get("username").is_none() || credentials.get("password").is_none(){
         return Err(AppError::BadRequest); 
     }

@@ -69,6 +69,12 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
 
                     let the_file = fs::read(real_path.clone()).unwrap();
                     let ret = extract_extension(&the_file[..]);
+
+                    if ret.is_empty() || the_file.len() == 0 {
+                        fs::remove_file(real_path.clone())?;
+                        continue;
+                    }
+
                     cloned_path.set_extension(ret.clone());
                     let _return = fs::rename(real_path, cloned_path.clone());
                     
@@ -124,11 +130,11 @@ pub async fn create_new_blog(req: HttpRequest, app_state: Data<AppState>, mut mp
     Ok(HttpResponse::Ok().body(filename))
 }
 #[get("/blogs/{username}")]
-pub async fn get_blogs_by_id(req: HttpRequest, app_state: Data<AppState>) -> Result<HttpResponse, AppError> {
+pub async fn get_blogs_by_user(req: HttpRequest, app_state: Data<AppState>) -> Result<HttpResponse, AppError> {
     let username = req.match_info().query("username").to_string();
 
     let conn = app_state.psql_pool.clone().get().unwrap();
-    let user = User::find_user_by_username(&conn, &username).ok_or(AppError::UnauthorizedError)?;
+    let user = User::find_user_by_username(&conn, &username).ok_or(AppError::BadRequest)?;
 
     let posts = Blog::get_by_creator_id(&conn, &user.id);
     Ok(HttpResponse::Ok().body(serde_json::to_string(&posts).unwrap()))
@@ -218,7 +224,6 @@ pub async fn delete_blog(req: HttpRequest, app_state: Data<AppState>) -> Result<
     if user.id != blog.created_by && !user.is_admin { 
         return Err(AppError::Forbidden)
     }
-
     Blog::delete_by_id(&psql_conn, blog.id);
 
     Ok(HttpResponse::Ok().finish())
