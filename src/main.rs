@@ -8,12 +8,12 @@ pub mod database;
 pub mod app;
 
 mod auth;
-mod infrastructure;
+mod routes;
 
 use std::{sync::Arc};
 use actix_web::{HttpServer, App};
 use diesel::r2d2::{self, ConnectionManager};
-use infrastructure::{user::*, blog::*, token::*, comment::*};
+use routes::{user::*, blog::*, token::*, comment::*};
 use app::AppState;
 
 #[actix_web::main]
@@ -45,7 +45,7 @@ async fn main() -> std::io::Result<()>{
         .service(create_new_blog)
         .service(edit_blogs)
         .service(like_a_blog)
-        .service(get_blogs_by_id)
+        .service(get_blogs_by_user)
         .service(create_new_blog)
         .service(delete_blog)
         .service(get_image)
