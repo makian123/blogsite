@@ -10,23 +10,15 @@ pub mod app;
 mod auth;
 mod routes;
 
-use std::{sync::Arc};
 use actix_web::{HttpServer, App};
-use diesel::r2d2::{self, ConnectionManager};
 use routes::{user::*, blog::*, token::*, comment::*};
 use app::AppState;
+use crate::database::db_utils::{redis_connect_to_db, psql_connect_to_db};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()>{
-    dotenv::dotenv().ok();
-
-    let psql = std::env::var("DATABASE_URL").expect("Enviroment vraible: 'DATABASE_URL' not set");
-    let redis = std::env::var("REDIS_DATABASE_URL").expect("Enviroment vraible: 'DATABASE_URL' not set");
-    let psql_manager = ConnectionManager::<diesel::PgConnection>::new(psql);
-    let redis_manager = r2d2_redis::RedisConnectionManager::new(redis).unwrap();
-
-    let postgres_pool = Arc::new(r2d2::Pool::new(psql_manager).unwrap());
-    let redis_pool = Arc::new(r2d2::Pool::new(redis_manager).unwrap());
+    let postgres_pool = psql_connect_to_db(None);
+    let redis_pool = redis_connect_to_db(None);
 
     let app_state = AppState{
         psql_pool: postgres_pool,

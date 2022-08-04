@@ -5,6 +5,9 @@ use rand::distributions::{Alphanumeric, DistString};
 pub struct Token{}
 
 impl Token {
+    /** Generates a new token of aphanumeric type and length of 32 characters.
+     * Automatically inserts it into the redis database specified
+     */
     pub fn new(redis_conn: &mut PooledConnection<RedisConnectionManager>, user_id: &String) -> String{
         let str = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
 
@@ -13,6 +16,8 @@ impl Token {
         str
     }
 
+    /** Deletes a token from the database. If the token does not exist, it does nothing
+     */
     pub fn delete(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String){
         match redis_conn.get::<String, String>(token.clone()) {
             Ok(_) => {
@@ -22,10 +27,14 @@ impl Token {
         }
     }
 
+    /** Returns `user_id` if found, and if not returns an error */
     pub fn find(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String) -> Result<String, RedisError>{
         redis_conn.get::<&String, String>(token)
     }
 
+    /** Refreshes the token for 180 seconds if token is found 
+    * If the token is not found or refreshed it returns `false`, if it's successfully refreshed it returns `true`
+    */
     pub fn refresh(redis_conn: &mut PooledConnection<RedisConnectionManager>, token: &String) -> bool {
         let token = Token::find(redis_conn, token);
         if token.is_err() { return false; }

@@ -12,7 +12,29 @@ struct DummyUser{
     pub password: String
 }
 
-//User routes
+/// Pipe for logging in as user
+/// - url: `{domain}/user`
+/// 
+/// # HTTP request requirements
+/// ## body
+/// - json formatted string containing `username` and `password` keys
+/// 
+/// # Example
+/// ```
+/// let data = "{ username: \"Test username\", password: \"Test password\" }";
+/// let request = actix_web::test::TestRequest::get()
+///     .uri("localhost/user")
+///     .set_payload(data)
+///     .to_request();
+/// ```
+/// 
+/// # Response
+/// ## Ok
+/// - set cookie header containing login token
+/// ## Error
+/// - Bad request
+/// - Unauthorized
+/// - Internal server error
 #[get("/user")]
 pub async fn login(_req: HttpRequest, req_body: String, app_state: Data<AppState>) -> Result<HttpResponse, AppError>{
     let credentials: Value = serde_json::from_str(req_body.trim()).unwrap();
@@ -27,7 +49,7 @@ pub async fn login(_req: HttpRequest, req_body: String, app_state: Data<AppState
 
     let user = User::find_user_by_username(&psql_conn, &username).ok_or(AppError::UnauthorizedError)?;
 
-    if user.pass != pw { 
+    if user.pass != pw {
         return Err(AppError::UnauthorizedError); 
     }
 
@@ -39,6 +61,28 @@ pub async fn login(_req: HttpRequest, req_body: String, app_state: Data<AppState
 
     Ok(HttpResponse::Ok().cookie(cookie).finish())
 }
+
+/// Pipe for creating an user
+/// - url: `{domain}/user`
+/// 
+/// # HTTP request requirements
+/// ## body
+/// - json formatted string containing `username` and `password` keys
+/// - `password` must be at least 10 characters long
+/// 
+/// # Example
+/// ```
+/// let data = "{ username: \"Test username\", password: \"Test password\" }";
+/// let request = actix_web::test::TestRequest::post()
+///     .uri("localhost/user")
+///     .set_payload(data)
+///     .to_request();
+/// ```
+/// 
+/// # Response
+/// ## Ok
+/// ## Error
+/// - Bad request
 #[post("/user")]
 pub async fn create_new_user(req_body: String, app_state: Data<AppState>) -> Result<HttpResponse, AppError>{
     let mut user = serde_json::from_str::<DummyUser>(&req_body).map_err(|_| AppError::BadRequest)?;
@@ -57,6 +101,29 @@ pub async fn create_new_user(req_body: String, app_state: Data<AppState>) -> Res
 
     Ok(HttpResponse::Ok().finish())
 }
+
+/// Pipe for deleting an user
+/// - url: `{domain}/user/{username}`
+/// 
+/// # HTTP request requirements
+/// - `{username}` value as parameter
+/// ## header
+/// - cookie named `token` containing login token
+/// 
+/// # Example
+/// ```
+/// let cookie = CookieBuilder::new("token", "test_token").finish();
+/// let request = actix_web::test::TestRequest::delete()
+///     .uri("localhost/user/test_user")
+///     .cookie(cookie)
+///     .to_request();
+/// ```
+/// 
+/// # Response
+/// ## Ok
+/// ## Error
+/// - Bad request
+/// - Unauthorized
 #[delete("/user/{username}")]
 pub async fn delete_an_user(req: HttpRequest, app_state: Data<AppState>) -> Result<HttpResponse, AppError> {
     let username = req.match_info().query("username").to_string();

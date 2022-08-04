@@ -3,7 +3,26 @@ use chrono::Utc;
 
 use crate::{app::AppState, auth::token::Token};
 
-//Token things
+/// Pipe for deauthorizing a token and removing it from the database
+/// - url: `{domain}/api/deauth`
+/// 
+/// # HTTP request requirements
+/// ## header
+/// - cookie named `token` containing login token
+/// 
+/// # Example
+/// ```
+/// let cookie = CookieBuilder::new("token", "test_token").finish();
+/// let request = actix_web::test::TestRequest::delete()
+///     .uri("localhost/api/deauth")
+///     .cookie(cookie)
+///     .to_request();
+/// ```
+/// 
+/// # Response
+/// ## Ok
+/// ## Error
+/// - Unauthorized
 #[delete("/api/deauth")]
 pub async fn deauth_token(req: HttpRequest, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");
@@ -24,6 +43,28 @@ pub async fn deauth_token(req: HttpRequest, app_state: Data<AppState>) -> impl R
 
     response
 }
+
+/// Pipe for refreshing a token for a server specified duration
+/// - url: `{domain}/api/refresh`
+/// 
+/// # HTTP request requirements
+/// ## header
+/// - cookie named `token` containing login token
+/// 
+/// # Example
+/// ```
+/// let cookie = CookieBuilder::new("token", "test_token").finish();
+/// let request = actix_web::test::TestRequest::put()
+///     .uri("localhost/api/refresh")
+///     .cookie(cookie)
+///     .to_request();
+/// ```
+/// 
+/// # Response
+/// ## Ok
+/// - set cookie header containing refreshed login cookie
+/// ## Error
+/// - Unauthorized
 #[put("/api/refresh")]
 pub async fn refresh_token(req: HttpRequest, app_state: Data<AppState>) -> impl Responder{
     let token = req.cookie("token");

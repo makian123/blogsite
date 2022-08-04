@@ -47,6 +47,9 @@ impl Ord for Blog {
 }
 
 impl Blog {
+    /** Creates a new blog which is inserted into the database,
+     * `img_id` parameter takes filename of the image
+     */
     pub fn new(conn: &PgConnection, creator: &User, title_in: &String, body_in: &String, img_id: Option<&String>) -> Result<Blog, AppError>{
         if title_in.len() == 0 || body_in.len() == 0{
             return Err(AppError::BadRequest);
@@ -74,6 +77,9 @@ impl Blog {
         Ok(ret_blog)
     }
     
+    /** Returns all blogs which were created by the specified user,
+     * vector is automatically sorted from the most recent being first to the oldest being last 
+     */
     pub fn get_by_creator_id(conn: &PgConnection, creator: &String) -> Vec<Blog> {
         use crate::schema::blogs::dsl::*;
     
@@ -89,6 +95,8 @@ impl Blog {
 
         user_blogs
     }
+    
+    /** Returns blog containing certain id */
     pub fn get_by_id(conn: &PgConnection, blog_id: i32) -> Option<Blog>{
         use crate::schema::blogs::dsl::*;
 
@@ -100,11 +108,13 @@ impl Blog {
         Some(blog.unwrap()[0].clone())
     }
 
+    /** Deletes all blogs created by certain user (this does not remove images used in the blogs) */
     pub fn delete_by_user_id(conn: &PgConnection, user_id: &String){
         use crate::schema::blogs::dsl::*;
     
         let _result = diesel::delete(schema::blogs::table).filter(created_by.eq(user_id)).execute(conn);
     }
+    /** Deletes a blog with the specified id, also deletes the file associated with the blog */
     pub fn delete_by_id(conn: &PgConnection, blog_id_in: i32){
         use crate::schema::blogs::dsl::*;
         use crate::schema::likes::dsl::*;
@@ -121,6 +131,7 @@ impl Blog {
         let _result = diesel::delete(schema::likes::table).filter(blog_id.eq(blog_id_in)).execute(conn);
     }
     
+    /** Edits any of the given parameters of the blog */
     pub fn edit(&mut self, conn: &PgConnection, title_in: Option<&String>, body_in: Option<&String>, likes_in: Option<i32>){
         use self::schema::blogs::dsl::*;
 

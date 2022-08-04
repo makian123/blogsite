@@ -68,6 +68,8 @@ impl User {
         Ok(ret_user)
     }
 
+    /** Deletes an user, also deletes anything related to the user (files in the blogs included)
+     */
     pub fn delete(&self, conn: &PooledConnection<ConnectionManager<PgConnection>>) {
         use schema::users::*;
 
@@ -79,6 +81,7 @@ impl User {
         let _result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
     }
 
+    /** Returns an user with the id specified */
     pub fn find_by_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user_id: &String) -> Result<User, AppError>{
         use crate::schema::users::dsl::*;
     
@@ -100,10 +103,10 @@ impl User {
     /// If no user is found, or an error occurs a `None` option will be returned.
     /// # Example
     /// ```
-    /// let user find_user_by_username(&conn, &"username".to_string());
-    /// match user{
-    ///     Some(usr) => {
-    ///         println!("{:?}", usr);
+    /// let user_found = find_user_by_username(&conn, &"username".to_string());
+    /// match user_found{
+    ///     Some(user) => {
+    ///         println!("{:?}", user);
     ///     },
     ///     None => {
     ///         println!("No user found");
