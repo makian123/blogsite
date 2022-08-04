@@ -9,6 +9,7 @@ pub struct Like{
 }
 
 impl Like{
+    /** Creates a like with `user` and `blog` id's specified */
     pub fn new(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: &String, blog: i32) -> Option<Like> {
         let like = Like {
             user_id: user.clone(),
@@ -22,6 +23,7 @@ impl Like{
         }
         Some(res.unwrap())
     }
+    /** Gets all likes by the user id */
     pub fn get_by_user_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: String) -> Vec<Like> {
         use crate::schema::likes::dsl::*;
         let likes_found = likes.filter(user_id.eq(user)).load::<Like>(conn);
@@ -31,6 +33,7 @@ impl Like{
         
         likes_found.unwrap()
     }
+    /** Gets all likes from blog id */
     pub fn get_by_blog_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, blog: i32) -> Vec<Like> {
         use crate::schema::likes::dsl::*;
         let likes_found = likes.filter(blog_id.eq(blog)).load::<Like>(conn);
@@ -40,6 +43,7 @@ impl Like{
         
         likes_found.unwrap()
     }
+    /** Deletes a like */
     pub fn delete(conn: &PooledConnection<ConnectionManager<PgConnection>>, user: &String, blog: i32) {
         use crate::schema::likes::dsl::*;
         let _temp = diesel::delete(likes.filter(user_id.eq(user)).filter(blog_id.eq(blog))).execute(conn);
