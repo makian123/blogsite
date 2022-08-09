@@ -1,101 +1,117 @@
-use diesel::{
-    PgConnection,
-    prelude::*,
-    r2d2::{
-        PooledConnection,
-        ConnectionManager
-    }
-};
 use crate::{
-    schema::{
-        users,
-        self
-    },
     app::AppError,
-    database::models::blog::Blog
+    database::models::blog::Blog,
+    schema::{self, users},
+};
+use diesel::{
+    prelude::*,
+    r2d2::{ConnectionManager, PooledConnection},
+    PgConnection,
 };
 
-#[derive(Debug)]
-#[derive(Queryable)]
-#[derive(Clone)]
-pub struct User{
+pub trait UserTrait {
+    fn new(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        uname: &String,
+        pw: &String,
+        admin: bool,
+    ) -> Result<User, AppError>;
+    fn delete(&self, conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>);
+    fn find_by_id(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        user_id: &String,
+    ) -> Result<User, AppError>;
+    fn find_by_username(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        uname: &String,
+    ) -> Option<User>;
+}
+
+#[derive(Debug, Queryable, Clone)]
+pub struct User {
     pub id: String,
     pub username: String,
     ///SHA256 of the password
     pub pass: String,
-    pub is_admin: bool
+    pub is_admin: bool,
 }
 
 #[derive(Insertable)]
-#[table_name="users"]
-pub struct UserInsert{
+#[table_name = "users"]
+pub struct UserInsert {
     pub username: String,
     pub pass: String,
-    pub is_admin: bool
+    pub is_admin: bool,
 }
 
-impl User {
+impl UserTrait for User {
     /// Pushes a new user object in the database and returns a result
     /// of `User` or `&str`
-    /// 
+    ///
     /// # Example
     /// ```
     /// let result = new_user(
-    ///     &conn, 
-    ///     "username".to_string(), 
+    ///     &conn,
+    ///     "username".to_string(),
     ///     "SHA256 of the password".to_string());
     /// ```
-    pub fn new <'a>(conn: &PooledConnection<ConnectionManager<PgConnection>>, uname: &String, pw: &String, admin: bool) -> Result<User, &'a str>{
-        if pw.len() != 64 {
-            return Err("Invalid password hash length");
-        }
-
-        if uname.len() == 0 {
-            return Err("Username not specified");
+    fn new(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        uname: &String,
+        pw: &String,
+        admin: bool,
+    ) -> Result<User, AppError> {
+        if pw.len() != 64 || uname.len() == 0 {
+            return Err(AppError::BadRequest);
         }
 
         let to_insert = UserInsert {
             username: uname.clone(),
             pass: pw.clone(),
-            is_admin: admin
+            is_admin: admin,
         };
 
         let ret_user: User = diesel::insert_into(schema::users::table)
             .values(&to_insert)
-            .get_result(conn)
-            .expect("Error");
+            .get_result(conn.ok_or(AppError::InternalServerError)?)?;
 
         Ok(ret_user)
     }
 
     /** Deletes an user, also deletes anything related to the user (files in the blogs included)
      */
-    pub fn delete(&self, conn: &PooledConnection<ConnectionManager<PgConnection>>) {
+    fn delete(&self, conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>) {
         use schema::users::*;
+        let conn = conn.unwrap();
 
         let the_id = self.id.clone();
         let blogs = Blog::get_by_creator_id(conn, &self.id);
         for blog in blogs {
             Blog::delete_by_id(conn, blog.id);
         }
-        let _result = diesel::delete(users::table).filter(id.eq(the_id)).execute(conn);
+        let _result = diesel::delete(users::table)
+            .filter(id.eq(the_id))
+            .execute(conn);
     }
 
     /** Returns an user with the id specified */
-    pub fn find_by_id(conn: &PooledConnection<ConnectionManager<PgConnection>>, user_id: &String) -> Result<User, AppError>{
+    fn find_by_id(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        user_id: &String,
+    ) -> Result<User, AppError> {
         use crate::schema::users::dsl::*;
-    
-        let user_found = users.filter(id.eq(user_id)).load::<User>(conn);
-    
+
+        let user_found = users.filter(id.eq(user_id)).load::<User>(conn.unwrap());
+
         match user_found {
             Ok(ret) => {
                 if ret.len() == 0 {
                     return Err(AppError::BadRequest);
                 }
-    
+
                 Ok(ret[0].clone())
-            },
-            Err(_msg) => Err(AppError::UnauthorizedError)
+            }
+            Err(_msg) => Err(AppError::UnauthorizedError),
         }
     }
 
@@ -113,10 +129,13 @@ impl User {
     ///     }
     /// }
     /// ```
-    pub fn find_user_by_username(conn: &PooledConnection<ConnectionManager<PgConnection>>, uname: &String) -> Option<User> {
+    fn find_by_username(
+        conn: Option<&PooledConnection<ConnectionManager<PgConnection>>>,
+        uname: &String,
+    ) -> Option<User> {
         use crate::schema::users::dsl::*;
 
-        let user_found = users.filter(username.eq(uname)).load::<User>(conn);
+        let user_found = users.filter(username.eq(uname)).load::<User>(conn.unwrap());
 
         match user_found {
             Ok(ret) => {
@@ -125,9 +144,8 @@ impl User {
                 }
 
                 Some(ret[0].clone())
-            },
-            Err(_msg) => None
+            }
+            Err(_msg) => None,
         }
     }
-
 }

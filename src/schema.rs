@@ -43,9 +43,4 @@ joinable!(comments -> users (user_id));
 joinable!(likes -> blogs (blog_id));
 joinable!(likes -> users (user_id));
 
-allow_tables_to_appear_in_same_query!(
-    blogs,
-    comments,
-    likes,
-    users,
-);
+allow_tables_to_appear_in_same_query!(blogs, comments, likes, users,);
