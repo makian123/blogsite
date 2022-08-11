@@ -5,7 +5,7 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use chrono::Utc;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha256::digest;
 
@@ -15,7 +15,7 @@ use crate::{
     database::models::user::*,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct DummyUser {
     pub username: String,
     pub password: String,
@@ -113,6 +113,7 @@ pub async fn login(
 /// - Bad request
 #[post("/user")]
 pub async fn create_new_user(
+    _req: HttpRequest,
     req_body: String,
     app_state: Data<AppState>,
 ) -> Result<HttpResponse, AppError> {
@@ -121,6 +122,7 @@ pub async fn create_new_user(
     let conn = app_state.psql_pool.clone().get().unwrap();
 
     user.password = user.password.trim().to_string();
+    user.username = user.username.trim().to_string();
 
     if user.password.len() < 10 {
         return Err(AppError::BadRequest);
@@ -172,12 +174,16 @@ pub async fn delete_an_user(
 
     let conn = app_state.psql_pool.clone().get().unwrap();
     let user = User::find_by_id(Some(&conn), &user_id)?;
-    if user.username != username {
+    let to_delete = User::find_by_username(Some(&conn), &username).unwrap();
+    if user.username != username && !user.is_admin {
         return Err(AppError::Forbidden);
     }
 
-    Token::delete(&mut redis_conn, &token);
-    user.delete(Some(&conn));
+    if !user.is_admin {
+        Token::delete(&mut redis_conn, &token);
+    }
+
+    to_delete.delete(Some(&conn));
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -185,7 +191,7 @@ pub async fn delete_an_user(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{test, test::call_service, App};
+    use actix_web::{cookie::CookieBuilder, test, test::call_service, App, web};
 
     #[actix_rt::test]
     async fn test_user_login() {
@@ -198,7 +204,15 @@ mod tests {
         )
         .await;
 
-        let payload = "{ \"username\": \"marko13\", \"password\": \"gaser_marko\"}";
+        let to_del = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+
+        let payload = "{ \"username\": \"Test_user123\", \"password\": \"test_password123\"}";
         let req = test::TestRequest::get()
             .uri("/user")
             .insert_header(actix_web::http::header::ContentType::json())
@@ -207,10 +221,11 @@ mod tests {
             .to_request();
 
         let resp = call_service(&app, req).await;
-        debug_assert!(resp.status().is_success());
 
         let cookie = resp.headers().get("set-cookie");
         debug_assert!(cookie != None);
+
+        to_del.delete(Some(&appstate.psql_pool.get().unwrap()));
 
         let token = std::str::from_utf8(cookie.unwrap().as_bytes()).unwrap();
         Token::delete(
@@ -219,36 +234,27 @@ mod tests {
         );
     }
 
-    //#[actix_rt::test]
+    #[actix_rt::test]
     async fn test_user_create() {
         let appstate = AppState::new(None);
 
         let app = test::init_service(
             App::new()
                 .app_data(actix_web::web::Data::new(appstate.clone()))
-                .service(super::create_new_user)
-                .service(super::login),
+                .service(super::create_new_user),
         )
         .await;
 
-        let payload = "{ \"username\": \"Test_user123\", \"password\": \"test_user123\"}";
+        let payload = DummyUser {
+            username: String::from("Test_user123"),
+            password: String::from("test_password123"),
+        };
         let req = test::TestRequest::post()
             .uri("/user")
-            .insert_header(actix_web::http::header::ContentType::json())
             .app_data(Data::new(appstate.clone()))
-            .set_payload(payload)
+            .set_json(payload)
             .to_request();
         let resp = test::call_service(&app, req).await;
-        debug_assert!(resp.status().is_success());
-
-        let req = test::TestRequest::get()
-            .uri("/user")
-            .insert_header(actix_web::http::header::ContentType::json())
-            .app_data(Data::new(appstate.clone()))
-            .set_payload(payload)
-            .to_request();
-
-        let resp = call_service(&app, req).await;
         debug_assert!(resp.status().is_success());
 
         let user = User::find_by_username(
@@ -258,5 +264,43 @@ mod tests {
         debug_assert!(user.is_some());
 
         User::delete(&user.unwrap(), Some(&appstate.psql_pool.get().unwrap()));
+    }
+
+    #[actix_rt::test]
+    async fn test_user_delete() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::delete_an_user),
+        )
+        .await;
+
+        let usr = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &usr.id);
+        let cookie = CookieBuilder::new("token", &token).finish();
+
+        let req = test::TestRequest::delete()
+            .uri("/user/Test_user123")
+            .cookie(cookie)
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+        if !resp.status().is_success() {
+            usr.delete(Some(&appstate.psql_pool.get().unwrap()));
+            panic!();
+        }
+
+        if User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id).is_ok() {
+            User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id).unwrap().delete(Some(&appstate.psql_pool.get().unwrap()));
+            panic!();
+        }
     }
 }

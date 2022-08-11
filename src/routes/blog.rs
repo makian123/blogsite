@@ -130,7 +130,6 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
 /// - Bad request
 /// - Unauthorized
 /// - Internal server error
-
 #[post("/blog")]
 pub async fn create_new_blog(
     req: HttpRequest,
@@ -436,4 +435,274 @@ pub async fn get_image(req: HttpRequest) -> Result<HttpResponse, AppError> {
     let file = fs::read(file_path)?;
 
     Ok(HttpResponse::Ok().body(file))
+}
+
+#[cfg(test)]
+mod tests {
+    use actix_web::cookie::CookieBuilder;
+    use actix_web::test;
+    use actix_web::test::call_service;
+    use actix_web::App;
+    use sha256::digest;
+    use pretty_assertions::*;
+
+    use super::*;
+
+    //#[actix_rt::test]
+    async fn test_blog_create() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::create_new_blog),
+        )
+        .await;
+
+        let usr = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &usr.id);
+        let cookie = CookieBuilder::new("token", token).finish();
+    }
+
+    #[actix_rt::test]
+    async fn test_get_blogs_by_user() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::get_blogs_by_user),
+        )
+        .await;
+
+        let usr = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &usr.id);
+        let _blog = Blog::new(
+            &appstate.psql_pool.get().unwrap(),
+            &usr,
+            &String::from("Test title"),
+            &String::from("Test body"),
+            None,
+        )
+        .unwrap();
+        let cookie = CookieBuilder::new("token", token).finish();
+
+        let req = test::TestRequest::get()
+            .uri("/blogs/Test_user123")
+            .insert_header(actix_web::http::header::ContentType::form_url_encoded())
+            .cookie(cookie.clone())
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+        if !resp.status().is_success(){
+            usr.delete(Some(&appstate.psql_pool.get().unwrap()));
+            panic!();
+        }
+
+        usr.delete(Some(&appstate.psql_pool.get().unwrap()));
+
+        let req = test::TestRequest::get()
+            .uri("/blogs/Test_user123")
+            .insert_header(actix_web::http::header::ContentType::form_url_encoded())
+            .cookie(cookie)
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+
+        let mut ctr = 0;
+        let mut user = User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id);
+        while ctr < 10 && user.is_ok(){
+            user.unwrap().delete(Some(&appstate.psql_pool.get().unwrap()));
+            user = User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id);
+            actix::clock::sleep(std::time::Duration::from_millis(500)).await;
+        }
+        assert!(user.is_err());
+    }
+
+    #[actix_rt::test]
+    async fn test_blog_edit() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::edit_blogs),
+        )
+        .await;
+
+        let user = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &user.id);
+        let cookie = CookieBuilder::new("token", token).finish();
+        let blog = Blog::new(
+            &appstate.psql_pool.get().unwrap(),
+            &user,
+            &String::from("Test title"),
+            &String::from("Test body"),
+            None,
+        )
+        .unwrap();
+
+        let payload = "{ \"title\": \"edited test title\", \"body\": \"edited test body\" }";
+
+        let req = test::TestRequest::put()
+            .uri(format!("/blogs/{}", blog.id).as_str())
+            .insert_header(actix_web::http::header::ContentType::json())
+            .set_payload(payload)
+            .cookie(cookie)
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+        assert!(resp.status().is_success());
+        let blog = Blog::get_by_id(&appstate.psql_pool.get().unwrap(), blog.id).unwrap();
+
+        pretty_assertions::assert_eq!(blog.title, String::from("edited test title"));
+        pretty_assertions::assert_eq!(blog.body, String::from("edited test body"));
+
+        user.delete(Some(&appstate.psql_pool.get().unwrap()));
+    }
+
+    #[actix_rt::test]
+    async fn test_blog_like() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::like_a_blog),
+        )
+        .await;
+
+        let user = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &user.id);
+        let cookie = CookieBuilder::new("token", token).finish();
+        let blog = Blog::new(
+            &appstate.psql_pool.get().unwrap(),
+            &user,
+            &String::from("Test title"),
+            &String::from("Test body"),
+            None,
+        )
+        .unwrap();
+
+        let req = test::TestRequest::put()
+            .uri(format!("/blogs/{}/like", blog.id).as_str())
+            .app_data(actix_web::web::Data::new(appstate.clone()))
+            .cookie(cookie.clone())
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+        assert!(resp.status().is_success());
+
+        if let Some(found_blog) = Blog::get_by_id(&appstate.psql_pool.get().unwrap(), blog.id) {
+            assert!(found_blog.likes == 1);
+        } else {
+            panic!();
+        }
+
+        let req = test::TestRequest::put()
+            .uri(format!("/blogs/{}/like", blog.id).as_str())
+            .app_data(appstate.clone())
+            .cookie(cookie.clone())
+            .to_request();
+
+        let resp = call_service(&app, req).await;
+        assert!(resp.status().is_success());
+
+        if let Some(found_blog) = Blog::get_by_id(&appstate.psql_pool.get().unwrap(), blog.id) {
+            assert!(found_blog.likes == 0);
+        } else {
+            panic!();
+        }
+        user.delete(Some(&appstate.psql_pool.get().unwrap()));
+    }
+
+    #[actix_rt::test]
+    async fn test_blog_delete() {
+        let appstate = AppState::new(None);
+
+        let app = test::init_service(
+            App::new()
+                .app_data(actix_web::web::Data::new(appstate.clone()))
+                .service(super::delete_blog),
+        )
+        .await;
+
+        let user = User::new(
+            Some(&appstate.psql_pool.get().unwrap()),
+            &String::from("Test_user123"),
+            &digest("test_password123"),
+            false,
+        )
+        .unwrap();
+        let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &user.id);
+        let cookie = CookieBuilder::new("token", token).finish();
+        let blog = Blog::new(
+            &appstate.psql_pool.get().unwrap(),
+            &user,
+            &String::from("Test title"),
+            &String::from("Test body"),
+            None,
+        )
+        .unwrap();
+
+        let req = test::TestRequest::delete()
+            .uri(format!("/blogs/{}", blog.id).as_str())
+            .app_data(appstate.clone())
+            .cookie(cookie)
+            .to_request();
+        let resp = call_service(&app, req).await;
+        assert!(resp.status().is_success());
+
+        assert!(Blog::get_by_id(&appstate.psql_pool.get().unwrap(), blog.id).is_none());
+        user.delete(Some(&appstate.psql_pool.get().unwrap()));
+    }
+
+    #[actix_rt::test]
+    async fn test_get_image() {
+        let app = test::init_service(App::new().service(super::get_image)).await;
+
+        let req = test::TestRequest::get()
+            .uri("/images/asd213.asd")
+            .to_request();
+
+        pretty_assertions::assert_ne!(call_service(&app, req).await.status().is_success(), true);
+        let mut path = PathBuf::new();
+        path.push("images/asd213.asd");
+
+        std::fs::write(path.clone(), &"asd123").unwrap();
+
+        let req = test::TestRequest::get()
+            .uri("/images/asd213.asd")
+            .to_request();
+        if call_service(&app, req).await.status().is_success() != true {
+            std::fs::remove_file(path).unwrap();
+            panic!();
+        }
+
+        std::fs::remove_file(path).unwrap();
+    }
 }

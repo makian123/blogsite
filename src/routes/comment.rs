@@ -152,7 +152,7 @@ mod tests {
     use super::*;
 
     #[actix_rt::test]
-    async fn new_comment() {
+    async fn test_new_comment() {
         let appstate = AppState::new(None);
 
         let app = test::init_service(
@@ -200,7 +200,7 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn get_comments() {
+    async fn test_get_comments() {
         let appstate = AppState::new(None);
 
         let app = test::init_service(
@@ -244,7 +244,7 @@ mod tests {
     }
 
     #[actix_rt::test]
-    async fn delete_comment() {
+    async fn test_delete_comment() {
         let appstate = AppState::new(None);
 
         let app = test::init_service(

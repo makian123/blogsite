@@ -3,6 +3,9 @@ extern crate diesel;
 extern crate dotenv;
 extern crate redis;
 
+#[macro_use]
+extern crate diesel_migrations;
+
 pub mod app;
 pub mod database;
 pub mod schema;
@@ -12,7 +15,10 @@ mod routes;
 
 use actix_web::{App, HttpServer};
 use app::AppState;
+use diesel_migrations::embed_migrations;
 use routes::{blog::*, comment::*, token::*, user::*};
+
+embed_migrations!("migrations/");
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

@@ -106,11 +106,17 @@ impl Blog {
         use crate::schema::blogs::dsl::*;
 
         let blog = blogs.filter(id.eq(blog_id)).load::<Blog>(conn);
-        if blog.is_err() {
-            return None;
-        }
 
-        Some(blog.unwrap()[0].clone())
+        match blog {
+            Ok(t) => {
+                if t.len() > 0 {
+                    Some(t[0].clone())
+                } else {
+                    None
+                }
+            }
+            Err(_) => None,
+        }
     }
 
     /** Deletes all blogs created by certain user (this does not remove images used in the blogs) */
