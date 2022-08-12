@@ -191,7 +191,7 @@ pub async fn delete_an_user(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{cookie::CookieBuilder, test, test::call_service, App, web};
+    use actix_web::{cookie::CookieBuilder, test, test::call_service, App};
 
     #[actix_rt::test]
     async fn test_user_login() {
@@ -299,7 +299,9 @@ mod tests {
         }
 
         if User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id).is_ok() {
-            User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id).unwrap().delete(Some(&appstate.psql_pool.get().unwrap()));
+            User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id)
+                .unwrap()
+                .delete(Some(&appstate.psql_pool.get().unwrap()));
             panic!();
         }
     }

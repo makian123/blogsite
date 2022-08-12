@@ -54,7 +54,7 @@ pub async fn create_comment(
     let comment = Comment::new(&psql_conn, blog_id, &user_id, &req_body)
         .ok_or(AppError::InternalServerError)?;
 
-    Ok(HttpResponse::Ok().body(comment.id))
+    Ok(HttpResponse::Ok().finish())
 }
 
 /// Pipe for getting comments from blog
@@ -73,6 +73,23 @@ pub async fn create_comment(
 /// # Response
 /// ## Ok
 /// - json formatted string of the blog [comments](Comment) in the string
+/// ```
+/// [
+///     {
+///         "id":"ef7a71b8-53bf-4c01-a3ad-39c332adbb39",
+///         "user_id":"e60a0f7b-381c-46b7-8736-1f204b329727",
+///         "blog_id":73,"created_at":"2022-08-12T06:05:31.097180",
+///         "body":"Comment body 1"
+///     },
+///     {
+///         "id":"30d177a9-b678-4b2f-85fd-33ad960fadd10ace0",
+///         "user_id":"e60a0f7b-381c-46b7-8736-1fa21ea5",
+///         "blog_id":73,
+///         "created_at":"2022-08-12T06:04:59.580527",
+///         "body":"Comment body 2"
+///     }
+/// ]
+/// ```
 /// ## Error
 /// - Bad request
 /// - Internal server error

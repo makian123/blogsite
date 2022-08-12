@@ -126,6 +126,9 @@ async fn parse_multipart(payload: &mut Multipart) -> Result<(String, String, Str
 /// # Response
 /// ## Ok
 /// - filename of the file uploaded (if there was one)
+/// ```
+/// "asfs12iudk2kdssab.jpg"
+/// ```
 /// ## Error
 /// - Bad request
 /// - Unauthorized
@@ -180,6 +183,20 @@ pub async fn create_new_blog(
 /// # Response
 /// ## Ok
 /// - json formatted string of all [blogs](Blog) created by user
+/// ```
+/// [
+///     {
+///         "id":73,
+///         "title":"Blog title",
+///         "body":"Blog body",
+///         "image_id":"b600b24f-9414-4009-b538-8b9ac77292be.png",
+///         "created_by":"e60a0f7b-381c-46b7-8736-1f204b329727",
+///         "created_at":"2022-08-04T09:22:30.664361",
+///         "updated_at":"2022-08-04T09:22:30.664361",
+///         "likes":0
+///     }
+/// ]
+/// ```
 /// ## Error
 /// - Bad request
 #[get("/blogs/{username}")]
@@ -440,11 +457,11 @@ pub async fn get_image(req: HttpRequest) -> Result<HttpResponse, AppError> {
 #[cfg(test)]
 mod tests {
     use actix_web::cookie::CookieBuilder;
-    use actix_web::test;
-    use actix_web::test::call_service;
+    use actix_web::http::header::{HeaderMap, HeaderName, HeaderValue};
+    use actix_web::test::{self, call_service};
     use actix_web::App;
     use sha256::digest;
-    use pretty_assertions::*;
+    use tokio_stream;
 
     use super::*;
 
@@ -468,6 +485,29 @@ mod tests {
         .unwrap();
         let token = Token::new(&mut appstate.redis_pool.get().unwrap(), &usr.id);
         let cookie = CookieBuilder::new("token", token).finish();
+
+        let mut header_map = HeaderMap::new();
+        header_map.insert(
+            HeaderName::from_static("title"),
+            HeaderValue::from_static("Test title"),
+        );
+        header_map.insert(
+            HeaderName::from_static("body"),
+            HeaderValue::from_static("Test body"),
+        );
+
+        let newval = Box::new("asd123");
+        let strm = tokio_stream::empty();
+
+        let mp = Multipart::new(&header_map, strm);
+
+        let req = test::TestRequest::post()
+            .uri("/blog")
+            .cookie(cookie)
+            .app_data(appstate.clone())
+            .insert_header((actix_web::http::header::CONTENT_TYPE, "multipart/form-data"))
+            .to_request();
+        let resp = call_service(&app, req).await;
     }
 
     #[actix_rt::test]
@@ -506,7 +546,7 @@ mod tests {
             .to_request();
 
         let resp = call_service(&app, req).await;
-        if !resp.status().is_success(){
+        if !resp.status().is_success() {
             usr.delete(Some(&appstate.psql_pool.get().unwrap()));
             panic!();
         }
@@ -520,13 +560,16 @@ mod tests {
             .to_request();
 
         let resp = call_service(&app, req).await;
+        pretty_assertions::assert_ne!(resp.status().as_u16(), 200);
 
         let mut ctr = 0;
         let mut user = User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id);
-        while ctr < 10 && user.is_ok(){
-            user.unwrap().delete(Some(&appstate.psql_pool.get().unwrap()));
+        while ctr < 10 && user.is_ok() {
+            user.unwrap()
+                .delete(Some(&appstate.psql_pool.get().unwrap()));
             user = User::find_by_id(Some(&appstate.psql_pool.get().unwrap()), &usr.id);
             actix::clock::sleep(std::time::Duration::from_millis(500)).await;
+            ctr += 1;
         }
         assert!(user.is_err());
     }
